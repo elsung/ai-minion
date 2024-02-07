@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Live Transcription</title>
+    <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function(){
+            function fetchTranscription() {
+                $.ajax({
+                    url: '/get_transcription',
+                    type: 'GET',
+                    success: function(response) {
+                        $('#transcribed_text').html(response.transcription.replace(/\n/g, '<br>'));
+                        var elem = document.getElementById('transcribed_text');
+                        elem.scrollTop = elem.scrollHeight;
+                    },
+                    error: function(error) {
+                        console.log(error);
+                    }
+                });
+            }
+            setInterval(fetchTranscription, 1000); // Fetch transcription every 1 second
+
+            $('#toggle_settings_button').click(function() {
+                var settingsSection = $('#settings_section');
+                if (settingsSection.css('display') === 'none') {
+                    settingsSection.show();
+                    $('#toggle_settings_button').text('Hide Settings');
+                } else {
+                    settingsSection.hide();
+                    $('#toggle_settings_button').text('Show Settings');
+                }
+            });
+
+            function updateStatus() {
+                $.ajax({
+                    url: '/status',
+                    type: 'GET',
+                    success: function(response) {
+                        let statusText = "Status: " + response.status;
+                        $('#status_text').text(statusText);
+
+                        let imageUrl;
+                        switch(response.status) {
+                            case 'listening':
+                                imageUrl = "{{ url_for('static', filename='listen.jpg') }}";
+                                break;
+                            case 'transcribing':
+                                imageUrl = "{{ url_for('static', filename='think.gif') }}";
+                                break;
+                            default:
+                                imageUrl = "{{ url_for('static', filename='idle.gif') }}";
+                        }
+                        $('#status_image').attr('src', imageUrl);
+                    },
+                    error: function(error) {
+                        console.log(error);
+                    }
+                });
+            }
+            setInterval(updateStatus, 500); // Check status every 0.5 seconds
+
+            function fetchDevices() {
+                $.ajax({
+                    url: '/get_devices',
+                    type: 'GET',
+                    success: function(response) {
+                        var deviceSelect = $('#device_select');
+                        deviceSelect.empty();
+                        response.forEach(function(device) {
+                            deviceSelect.append(new Option(device.name, device.index));
+                        });
+                        setCurrentDevice(); // Set the current device after fetching devices
+                    },
+                    error: function(error) {
+                        console.log(error);
+                    }
+                });
+            }
+
+            function setCurrentDevice() {
+                $.ajax({
+                    url: '/get_current_device',
+                    type: 'GET',
+                    success: function(response) {
+                        $('#device_select').val(response.current_device_index);
+                        highlightSelectedDevice();
+                    },
+                    error: function(error) {
+                        console.log(error);
+                    }
+                });
+            }
+
+            function setDevice() {
+                var selectedDevice = $('#device_select').val();
+                $.ajax({
+                    url: '/set_device',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ 'device_index': selectedDevice }),
+                    success: function(response) {
+                        alert(response.message);
+                        highlightSelectedDevice();
+                    },
+                    error: function(error) {
+                        console.log(error);
+                    }
+                });
+            }
+
+            function updateSettings() {
+                var settings = {
+                    chunk_length_s: $('#chunk_length_s').val(),
+                    frames_per_buffer: $('#frames_per_buffer').val(),
+                    max_segments: $('#max_segments').val(),
+                    record_seconds: $('#record_seconds').val(),
+                    silence_threshold: $('#silence_threshold').val(),
+                    minimum_audible_count: $('#minimum_audible_count').val(),
+                    pause_threshold: $('#pause_threshold').val(),
+                    max_accumulate_duration: $('#max_accumulate_duration').val(),
+                    min_accumulate_duration: $('#min_accumulate_duration').val(),
+                    significant_pause_duration: $('#significant_pause_duration').val(),
+                    // Add other settings here
+                };
+                $.ajax({
+                    url: '/update_settings',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(settings),
+                    success: function(response) {
+                        alert("Settings updated successfully!");
+                    },
+                    error: function(error) {
+                        console.log(error);
+                        alert("Failed to update settings.");
+                    }
+                });
+            }
+
+            function highlightSelectedDevice() {
+                $('#device_select option').removeClass('active-device');
+                $('#device_select option:selected').addClass('active-device');
+            }
+
+            $('#set_device_button').click(function() {
+                setDevice();
+            });
+
+            $('#update_settings_button').click(function() {
+                updateSettings();
+            });
+
+            fetchDevices(); // Fetch and set devices when the page loads
+
+            $('#quit_button').click(function() {
+                $.ajax({
+                    url: '/quit',
+                    type: 'POST',
+                    success: function(response) {
+                        alert("Quitting. Please close the browser tab.");
+                        window.close();
+                    },
+                    error: function(error) {
+                        console.log(error);
+                    }
+                });
+            });
+        });
+    </script>
+    <style>
+        body {
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+        }
+        #transcribed_text {
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            min-height: 200px;
+            max-height: 600px;
+            overflow-y: auto;
+            word-wrap: break-word;
+        }
+        #status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        #status img {
+            width: 120px;
+            margin-right: 10px;
+        }
+        #quit_button {
+            background-color: #d3d3d3;
+            color: black;
+            float: right;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+        #quit_button:hover {
+            background-color: #a9a9a9;
+        }
+        .active-device {
+            background-color: #d3d3d3; /* Example color for highlighting */
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Live Transcription</h1>
+    </header>
+    <section>
+        <select id="device_select"></select>
+        <button id="set_device_button">Set Device</button>
+        <div id="transcribed_text"></div>
+        <div id="status">
+            <img id="status_image" src="{{ url_for('static', filename='idle.gif') }}" alt="Status">
+            <span id="status_text">Status: Idle</span>
+        </div>
+        <button id="toggle_settings_button">Show Settings</button>
+        <div id="settings_section" style="display: none;">  
+            <h2>Settings</h2>
+            <label for="chunk_length_s">Chunk Length (s):</label>
+            <input type="number" id="chunk_length_s" value="30"><br>
+
+            <label for="frames_per_buffer">Frames Per Buffer:</label>
+            <input type="number" id="frames_per_buffer" value="1024"><br>
+
+            <!-- Add new inputs for each of the settings you want to control -->
+            <label for="max_segments">Max Segments:</label>
+            <input type="number" id="max_segments" value="1000"><br>
+
+            <label for="record_seconds">Record Seconds:</label>
+            <input type="number" id="record_seconds" value="1"><br>
+
+            <label for="silence_threshold">Silence Threshold:</label>
+            <input type="number" id="silence_threshold" value="100"><br>
+
+            <label for="minimum_audible_count">Minimum Audible Count:</label>
+            <input type="number" id="minimum_audible_count" value="1"><br>
+
+            <label for="pause_threshold">Pause Threshold:</label>
+            <input type="number" id="pause_threshold" value="1000"><br>
+
+            <label for="max_accumulate_duration">Max Accumulate Duration (s):</label>
+            <input type="number" id="max_accumulate_duration" value="10"><br>
+
+            <label for="min_accumulate_duration">Min Accumulate Duration (s):</label>
+            <input type="number" id="min_accumulate_duration" value="2"><br>
+
+            <label for="significant_pause_duration">Significant Pause Duration (s):</label>
+            <input type="number" id="significant_pause_duration" value="1.0" step="0.1"><br>
+
+            <button id="update_settings_button">Update Settings</button>
+        </div>
+        <button id="quit_button">Quit</button>
+    </section>
+    <footer>
+        <p>Transcription provided by Whisper-Plus</p>
+    </footer>
+</body>
+</html>
